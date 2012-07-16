@@ -40,7 +40,7 @@
 low_level_error_t miscop_Mount(uint32_t drive, uint32_t byte_address, uint8_t * restrict buffer, size_t length, disc_record_t * restrict disc_record)
 {
   low_level_error_t e;
-  uint64_t disc_address = byte_address;
+  uint64_t disc_address = (uint64_t) byte_address & LegacyDiscAddress_ByteOffset_Mask;
   IGNORE(disc_record);
 
   dprintf("Mount - from :%u/%08X to %p, length %u, disc record %p\n",
