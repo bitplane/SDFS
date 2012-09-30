@@ -20,6 +20,7 @@
  */
 /*
  * Copyright 2012 Ben Avison.  All rights reserved.
+ * Portions Copyright 2012 Jeffrey Lee.
  * Use is subject to license terms.
  */
 
@@ -165,7 +166,7 @@ _kernel_oserror *module_initialise(const char *cmd_tail, int podule_base, void *
     {
       service_SDIOSlotAttached((slot_spec & SDIOEnumerate_BusMask) >> SDIOEnumerate_BusShift,
                                (slot_spec & SDIOEnumerate_SlotMask) >> SDIOEnumerate_SlotShift,
-                               slot_spec * SDIOEnumerate_Integrated);
+                               slot_spec & SDIOEnumerate_Integrated);
       uint32_t unit_handle = 0;
       uint32_t unit_spec[2];
       uint32_t unit_size[2];
