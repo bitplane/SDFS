@@ -101,8 +101,7 @@ _kernel_oserror *module_initialise(const char *cmd_tail, int podule_base, void *
   }
 
   /* Register with Free */
-  e = _swix(Free_Register, _INR(0,2), fsnumber_SDFS, free_veneer, &free_handle);
-  if (e) goto failed_init;
+  _swix(Free_Register, _INR(0,2), fsnumber_SDFS, free_veneer, &free_handle);
 
   /* Check for compatible FileCore */
   uint32_t filecore_features;
