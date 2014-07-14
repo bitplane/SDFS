@@ -52,3 +52,5 @@ date-string:		Module_Date_CMHG
 
 generic-veneers:	module_discop_veneer/module_discop_handler,
 			module_miscop_veneer/module_miscop_handler
+
+vector-handlers:	module_tickerv_veneer/module_tickerv_handler

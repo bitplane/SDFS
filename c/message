@@ -67,6 +67,18 @@ const char *message_lookup_direct(const char *token)
     return e->errmess;
 }
 
+const char *message_lookup_buffer(const char *token, char *buffer, size_t buflen)
+{
+  const char *result;
+  _kernel_oserror *e = _swix(MessageTrans_Lookup, _INR(0,3)|_OUT(2), &g_message_fd, token, buffer, buflen, &result);
+  /* Note that MessageTrans always null-terminates the result even if it's
+   * truncated, and the buffer length includes the terminator character. */
+  if (!e)
+    return result;
+  else
+    return e->errmess;
+}
+
 _kernel_oserror *message_copy(const _kernel_oserror *error)
 {
   m_ErrorBuf.errnum = error->errnum;

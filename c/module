@@ -37,6 +37,7 @@
 #include "Global/FSNumbers.h"
 #include "Global/OsBytes.h"
 #include "Global/ModHand.h"
+#include "Global/RISCOS.h"
 #include "Global/SWIs.h"
 #include "Interface/FileCore.h"
 #include "Interface/FileCoreErr.h"
@@ -93,11 +94,11 @@ _kernel_oserror *module_initialise(const char *cmd_tail, int podule_base, void *
   gpiodebug_init();
 
   /* Initialise global variables */
-  strncpy(g_media_type_name, message_lookup_direct("Card"), MEDIA_TYPE_NAME_LEN - 1);
-  g_media_type_name[MEDIA_TYPE_NAME_LEN - 1] = '\0';
+  message_lookup_buffer("Card", g_media_type_name, MEDIA_TYPE_NAME_LEN);
   for (uint32_t i = 0; i < NUM_FLOPPIES + NUM_WINNIES; i++)
   {
     g_drive[i].sequence_lock = (spinlock_t) SPIN_INITIALISER;
+    g_drive[i].certainty_lock = (spinlock_t) SPIN_INITIALISER;
   }
 
   /* Register with Free */
@@ -165,7 +166,8 @@ _kernel_oserror *module_initialise(const char *cmd_tail, int podule_base, void *
     {
       service_SDIOSlotAttached((slot_spec & SDIOEnumerate_BusMask) >> SDIOEnumerate_BusShift,
                                (slot_spec & SDIOEnumerate_SlotMask) >> SDIOEnumerate_SlotShift,
-                               slot_spec & SDIOEnumerate_Integrated);
+                               slot_spec & SDIOEnumerate_Integrated,
+                               slot_spec & SDIOEnumerate_NoCardDetect);
       uint32_t unit_handle = 0;
       uint32_t unit_spec[2];
       uint32_t unit_size[2];
@@ -185,9 +187,14 @@ _kernel_oserror *module_initialise(const char *cmd_tail, int podule_base, void *
     }
   }
 
+  /* The module needs to be on TickerV the whole time */
+  e = _swix(OS_Claim, _INR(0,2), TickerV, module_tickerv_veneer, g_module_pw);
+  if (e) goto failed_init;
+
   return NULL;
 
 failed_init:
+  _swix(OS_Module, _INR(0,1), ModHandReason_Delete, "FileCore%" FILING_SYSTEM_TITLE);
   _swix(Free_DeRegister, _INR(0,2), fsnumber_SDFS, free_veneer, &free_handle);
   _swix(MessageTrans_CloseFile, _IN(0), &g_message_fd);
 #ifndef ROM_MODULE
@@ -201,6 +208,8 @@ _kernel_oserror *module_finalise(int fatal, int podule, void *pw)
   IGNORE(fatal);
   IGNORE(podule);
   IGNORE(pw);
+
+  _swix(OS_Release, _INR(0,2), TickerV, module_tickerv_veneer, g_module_pw);
 
   /* Kill our supporting FileCore instantiation */
   _swix(OS_Module, _INR(0,1), ModHandReason_Delete, "FileCore%" FILING_SYSTEM_TITLE);
@@ -230,13 +239,15 @@ void module_service(int service_number, _kernel_swi_regs *r, void *pw)
     case Service_SDIOSlotAttached:
       service_SDIOSlotAttached((r->r[2] & SDIOSlotAttached_BusMask) >> SDIOSlotAttached_BusShift,
                                (r->r[2] & SDIOSlotAttached_SlotMask) >> SDIOSlotAttached_SlotShift,
-                               r->r[2] & SDIOSlotAttached_Integrated);
+                               r->r[2] & SDIOSlotAttached_Integrated,
+                               r->r[2] & SDIOSlotAttached_NoCardDetect);
       break;
 
     case Service_SDIOSlotDetached:
       service_SDIOSlotDetached((r->r[2] & SDIOSlotAttached_BusMask) >> SDIOSlotAttached_BusShift,
                                (r->r[2] & SDIOSlotAttached_SlotMask) >> SDIOSlotAttached_SlotShift,
-                               r->r[2] & SDIOSlotAttached_Integrated);
+                               r->r[2] & SDIOSlotAttached_Integrated,
+                               r->r[2] & SDIOSlotAttached_NoCardDetect);
       break;
 
     case Service_SDIOUnitAttached:
@@ -458,4 +469,25 @@ _kernel_oserror *module_discop_handler(_kernel_swi_regs *r, void *pw)
     default:
       return (_kernel_oserror *) BadParmsErr;
   }
+}
+
+int module_tickerv_handler(_kernel_swi_regs *r, void *pw)
+{
+  IGNORE(r);
+  IGNORE(pw);
+
+  spinrw_read_lock(&g_drive_lock);
+
+  for (uint32_t drive = 0; drive < NUM_FLOPPIES + NUM_WINNIES; drive++)
+  {
+    spin_lock(&g_drive[drive].certainty_lock);
+    uint32_t old_value = g_drive[drive].certainty;
+    if (old_value > 0)
+      g_drive[drive].certainty = old_value - 1;
+    spin_unlock(&g_drive[drive].certainty_lock);
+  }
+
+  spinrw_read_unlock(&g_drive_lock);
+
+  return 1;
 }

@@ -112,7 +112,7 @@ static low_level_error_t transfer_with_retries(uint32_t reason,
     {
       /* First deselect all cards; someone else may have been talking to another one in the
        * same slot, and some cards don't like seeing a select without a preceding deselect */
-      COMMAND_NO_DATA(dr->bus, dr->slot, CMD7_SELECT_DESELECT_CARD, 0, R0, deselect_card_blk, e.oserror);
+      COMMAND_NO_DATA(dr->bus, dr->slot, flags & SDIOOp_DisableEscape, CMD7_SELECT_DESELECT_CARD, 0, R0, deselect_card_blk, e.oserror);
       if (e.oserror)
         dprintf("Deselect card returned %s\n", e.oserror->errmess);
       if (e.oserror && e.oserror->errnum == ErrorNumber_Escape)
@@ -124,7 +124,7 @@ static low_level_error_t transfer_with_retries(uint32_t reason,
       if (!e.oserror)
       {
         /* Now select the card. This gives us an opportunity to detect if the card is locked */
-        COMMAND_NO_DATA(dr->bus, dr->slot, CMD7_SELECT_DESELECT_CARD, dr->rca << 16, R1, select_card_blk, e.oserror);
+        COMMAND_NO_DATA(dr->bus, dr->slot, flags & SDIOOp_DisableEscape, CMD7_SELECT_DESELECT_CARD, dr->rca << 16, R1, select_card_blk, e.oserror);
         if (e.oserror)
           dprintf("Select card returned %s\n", e.oserror->errmess);
         if (e.oserror && e.oserror->errnum == ErrorNumber_Escape)
@@ -151,7 +151,7 @@ static low_level_error_t transfer_with_retries(uint32_t reason,
       tran_timeout += TRAN_TIMEOUT + 1;
       while (!e.oserror)
       {
-        COMMAND_NO_DATA(dr->bus, dr->slot, CMD13_SEND_STATUS, dr->rca << 16, R1, send_status_blk, e.oserror);
+        COMMAND_NO_DATA(dr->bus, dr->slot, flags & SDIOOp_DisableEscape, CMD13_SEND_STATUS, dr->rca << 16, R1, send_status_blk, e.oserror);
         if (!e.oserror && (send_status_blk.response & R1_CURRENT_STATE_MASK) == R1_CURRENT_STATE_TRAN)
           break;
         int32_t now;
@@ -176,7 +176,7 @@ static low_level_error_t transfer_with_retries(uint32_t reason,
         /* On-the-wire block length is fixed as 512 bytes by SDHCI for memory access commands.
          * Chances are that some cards out there have only been tested with SDHCI controllers,
          * so it's best to stick to that size whatever controller we're using. */
-        COMMAND_NO_DATA(dr->bus, dr->slot, CMD16_SET_BLOCKLEN, SECTOR_SIZE, R1, set_blocklen_blk, e.oserror);
+        COMMAND_NO_DATA(dr->bus, dr->slot, flags & SDIOOp_DisableEscape, CMD16_SET_BLOCKLEN, SECTOR_SIZE, R1, set_blocklen_blk, e.oserror);
         if (e.oserror)
           dprintf("Set blocklen returned %s\n", e.oserror->errmess);
         if (e.oserror && e.oserror->errnum == ErrorNumber_Escape)
@@ -204,7 +204,7 @@ static low_level_error_t transfer_with_retries(uint32_t reason,
         if (dr->cmd23_supported)
         {
           /* Card supports CMD23 - use it to improve speed */
-          COMMAND_NO_DATA(dr->bus, dr->slot, CMD23_SET_BLOCK_COUNT, *transfer_length >> LOG2_SECTOR_SIZE, R1, set_block_count_blk, e.oserror);
+          COMMAND_NO_DATA(dr->bus, dr->slot, flags & SDIOOp_DisableEscape, CMD23_SET_BLOCK_COUNT, *transfer_length >> LOG2_SECTOR_SIZE, R1, set_block_count_blk, e.oserror);
           if (e.oserror)
           {
             dprintf("CMD23 error: %s\n", e.oserror->errmess);
@@ -263,7 +263,7 @@ static low_level_error_t transfer_with_retries(uint32_t reason,
 
       if (e.oserror)
       {
-        /* SDIODriver's error buffer may be about to be overwritten, emsure we have a safe copy */
+        /* SDIODriver's error buffer may be about to be overwritten, ensure we have a safe copy */
         if (e.oserror->errnum == ErrorNumber_Escape)
           e.oserror = MESSAGE_ERRORLOOKUP(true, ExtEscape, 0);
         else
@@ -275,7 +275,7 @@ static low_level_error_t transfer_with_retries(uint32_t reason,
           int32_t abort_retries = reason == DiscOp_Verify ? VERIFY_RETRIES : RETRIES;
           do
           {
-            COMMAND_NO_DATA(dr->bus, dr->slot, CMD12_STOP_TRANSMISSION, 0, R1b, stop_transmission_blk, abort_error);
+            COMMAND_NO_DATA(dr->bus, dr->slot, SDIOOp_DisableEscape, CMD12_STOP_TRANSMISSION, 0, R1b, stop_transmission_blk, abort_error);
             /* No special case for Escape here - there's already a pending error, and we need to ensure the abort goes through */
           }
           while (abort_error && --abort_retries >= 0);
@@ -403,6 +403,67 @@ low_level_error_t discop(uint32_t reason,
     dprintf("Bad drive number: %u\n", drive);
     e.number = BadDriveErr;
     goto exit;
+  }
+
+  if (dr->slot_attached && dr->no_card_detect && dr->certainty == 0)
+  {
+    _kernel_oserror *err = _swix(SDIO_Control, _INR(0,1), SDIOControl_TryLock, (dr->bus << SDIOControl_BusShift) | (dr->slot << SDIOControl_SlotShift));
+    if (err)
+    {
+      if (err->errnum != ErrorNumber_SDIO_SlotInUse)
+      {
+        e.oserror = err;
+        dprintf("Slot lock returned %s\n", e.oserror->errmess);
+        goto exit;
+      }
+      /* otherwise the slot is currently in use, so obviously not in a timeout state */
+    }
+    else
+    {
+      dprintf("Need to probe for card presence\n");
+      bool rescan_needed = !dr->card_inserted;
+      if (dr->card_inserted)
+      {
+        COMMAND_NO_DATA(dr->bus, dr->slot, flags & SDIOOp_DisableEscape, CMD7_SELECT_DESELECT_CARD, 0, R0, deselect_card_blk, err);
+        if (err)
+        {
+          e.oserror = err->errnum == ErrorNumber_Escape ? MESSAGE_ERRORLOOKUP(true, ExtEscape, 0) : err;
+          dprintf("Deselect prior to probe returned %s\n", e.oserror->errmess);
+          _swix(SDIO_Control, _INR(0,1), SDIOControl_Unlock, (dr->bus << SDIOControl_BusShift) | (dr->slot << SDIOControl_SlotShift));
+          goto exit;
+        }
+        COMMAND_NO_DATA(dr->bus, dr->slot, flags & SDIOOp_DisableEscape, CMD7_SELECT_DESELECT_CARD, dr->rca << 16, R1, select_card_blk, err);
+        if (err)
+        {
+          if (err->errnum != ErrorNumber_SDIO_CTO)
+          {
+            e.oserror = err->errnum == ErrorNumber_Escape ? MESSAGE_ERRORLOOKUP(true, ExtEscape, 0) : err;
+            dprintf("Probe for RCA %04X returned %s\n", dr->rca, e.oserror->errmess);
+            _swix(SDIO_Control, _INR(0,1), SDIOControl_Unlock, (dr->bus << SDIOControl_BusShift) | (dr->slot << SDIOControl_SlotShift));
+            goto exit;
+          }
+          else
+          {
+            dprintf("Probe for RCA %04X met with no response\n", dr->rca);
+            rescan_needed = true;
+          }
+        }
+        else
+          dprintf("Probe for RCA %04X successful\n", dr->rca);
+      }
+      _swix(SDIO_Control, _INR(0,1), SDIOControl_Unlock, (dr->bus << SDIOControl_BusShift) | (dr->slot << SDIOControl_SlotShift));
+      if (rescan_needed)
+      {
+        /* Because we know we've already managed to acquire the lock, we know
+         * it's actually OK to do this, even though it's nominally non-reentrant */
+        dprintf("Rescan slot\n");
+        spinrw_read_unlock(&g_drive_lock); // we're going to want to claim a write lock on g_drive when we're re-entered
+        e.oserror = _swix(SDIO_Initialise, _INR(0,1), SDIOInitialise_RescanSlot, (dr->bus << SDIORescanSlot_BusShift) | (dr->slot << SDIORescanSlot_SlotShift));
+        spinrw_read_lock(&g_drive_lock);
+        if (e.oserror)
+          dprintf("Rescan slot returned %s\n", e.oserror->errmess);
+      }
+    }
   }
 
   if (!dr->slot_attached || !dr->card_inserted)

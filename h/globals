@@ -85,6 +85,9 @@
 //#define VERIFY_RETRIES (1) /* same as ADFS uses for hard discs */
 #define VERIFY_RETRIES (4)
 
+/** Timeout for transition to disc-maybe-changed state, in cs */
+#define FAITH (100)
+
 /** Bit shift to convert between bytes and sectors */
 #define LOG2_SECTOR_SIZE (9)
 
@@ -112,7 +115,7 @@
 /** 3-way concatenation macro that expands the result of the concatenation. */
 #define CONCAT3_AND_EXPAND(a,b,c) CONCAT(a,b,c)
 
-/** Issue a foreground command with no data transfer by jumping to the SDIO_Op SWI handler.
+/** Issue a foreground command with no data transfer by calling the SDIO_Op SWI handler.
  *  \param bus       Bus index.
  *  \param slot      Slot index.
  *  \param cmd       Command to issue, including application-command bit and flags if appropriate.
@@ -121,14 +124,15 @@
  *  \param crblock   Name of command-response block to declare. Data type is derived from \a res_type, and block remains in scope after the macro.
  *  \param error     Name of variable to hold error returned.
  */
-#define COMMAND_NO_DATA(bus, slot, cmd, arg, res_type, crblock, error)        \
+#define COMMAND_NO_DATA(bus, slot, escape_flag, cmd, arg, res_type, crblock, error) \
   CONCAT3(sdioop_cmdres_,res_type,_t) crblock;                                \
   crblock.command = (cmd);                                                    \
   crblock.argument = (arg);                                                   \
   (error) = sdio_op_fg_nodata(((slot) << SDIOOp_SlotShift) |                  \
                               ((bus) << SDIOOp_BusShift) |                    \
                               CONCAT_AND_EXPAND(SDIOOp_,res_type) |           \
-                              SDIOOp_TransNone,                               \
+                              SDIOOp_TransNone |                              \
+                              (escape_flag),                                  \
                               8 + CONCAT_AND_EXPAND(SDIOOp_ResLen_,res_type), \
                               &crblock,                                       \
                               OP_TIMEOUT);
@@ -230,6 +234,7 @@ typedef PACKED(struct)
 typedef struct
 {
   bool              slot_attached;     /**< Do we have an SDIODriver slot associated with this drive? */
+  bool              no_card_detect;    /**< Does the attached SDIODriver slot have a broken card detect? */
   volatile bool     card_inserted;     /**< Is a memory card present? */
   bool              write_protected;   /**< Is the write-protect tab engaged? */
   bool              memory_card;       /**< Is is a memory card? */
@@ -252,6 +257,8 @@ typedef struct
   uint64_t          capacity;          /**< Card size, in sectors */
   volatile uint32_t sequence_number;   /**< FileCore disc detection sequence number */
   spinlock_t        sequence_lock;     /**< Ensures updates to card_inserted and sequence_number are consistent */
+  volatile uint32_t certainty;         /**< Countdown until we lose confidence in what's in the drive (for drives with faulty card detect) */
+  spinlock_t        certainty_lock;    /**< Ensures atomic updates of certainty */
 } drive_t;
 
 

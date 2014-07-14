@@ -67,19 +67,26 @@ void miscop_PollChanged(uint32_t drive, uint32_t * restrict sequence_number, uin
   my_card_inserted &= g_drive[drive].card_inserted;
   uint32_t my_sequence_number = g_drive[drive].sequence_number;
   spin_unlock(&g_drive[drive].sequence_lock);
+  spin_lock(&g_drive[drive].certainty_lock);
+  uint32_t certain = g_drive[drive].certainty;
+  spin_unlock(&g_drive[drive].certainty_lock);
+  if (!g_drive[drive].slot_attached || !g_drive[drive].no_card_detect)
+    certain = 1;
   spinrw_read_unlock(&g_drive_lock);
 
   /* Now we have a consistent sequence number and inserted flag, compare it to
    * the caller's world view. */
-  if (my_sequence_number == *sequence_number)
+  if (certain)
     *result_flags = MiscOp_PollChanged_NotChanged_Flag | MiscOp_PollChanged_EmptyWorks_Flag | MiscOp_PollChanged_ChangedWorks_Flag;
   else
+    *result_flags = MiscOp_PollChanged_MaybeChanged_Flag | MiscOp_PollChanged_EmptyWorks_Flag | MiscOp_PollChanged_ChangedWorks_Flag;
+  if (my_sequence_number != *sequence_number)
     *result_flags = MiscOp_PollChanged_Changed_Flag | MiscOp_PollChanged_EmptyWorks_Flag | MiscOp_PollChanged_ChangedWorks_Flag;
-  if (!my_card_inserted)
+  if (!my_card_inserted && certain)
     *result_flags = MiscOp_PollChanged_Empty_Flag | MiscOp_PollChanged_EmptyWorks_Flag | MiscOp_PollChanged_ChangedWorks_Flag;
   *sequence_number = my_sequence_number;
 
-  dprintf("PollChanged - return flags %03X, sequence_number %u\n", *result_flags, *sequence_number);
+  dprintf("PollChanged(drive %u) - return flags %03X, sequence_number %u\n", drive, *result_flags, *sequence_number);
 }
 
 void miscop_LockDrive(uint32_t drive)

@@ -34,6 +34,7 @@
 
 _kernel_oserror *message_error_lookup(bool local, uint32_t number, const char *name, ...);
 const char *message_lookup_direct(const char *token);
+const char *message_lookup_buffer(const char *token, char *buffer, size_t buflen);
 _kernel_oserror *message_copy(const _kernel_oserror *error);
 
 #endif

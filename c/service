@@ -49,7 +49,7 @@ static void upcall(uint32_t reason, uint8_t drive)
   _swix(OS_UpCall, _INR(0,1), reason, drive_spec);
 }
 
-void service_SDIOSlotAttached(uint32_t bus, uint32_t slot, bool integrated)
+void service_SDIOSlotAttached(uint32_t bus, uint32_t slot, bool integrated, bool no_card_detect)
 {
   /* Don't provide a drive for non-removable IO slots */
   if (integrated)
@@ -63,6 +63,7 @@ void service_SDIOSlotAttached(uint32_t bus, uint32_t slot, bool integrated)
       break;
   if (i < NUM_FLOPPIES + NUM_WINNIES)
   {
+    g_drive[i].no_card_detect = no_card_detect;
     g_drive[i].card_inserted = false;
     g_drive[i].bus = bus;
     g_drive[i].slot = slot;
@@ -74,8 +75,10 @@ void service_SDIOSlotAttached(uint32_t bus, uint32_t slot, bool integrated)
   spinrw_write_unlock(&g_drive_lock);
 }
 
-void service_SDIOSlotDetached(uint32_t bus, uint32_t slot, bool integrated)
+void service_SDIOSlotDetached(uint32_t bus, uint32_t slot, bool integrated, bool no_card_detect)
 {
+  IGNORE(no_card_detect);
+
   /* Nothing to do for non-removable IO slots */
   if (integrated)
     return;
@@ -165,6 +168,7 @@ void service_SDIOUnitAttached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_
         dprintf("Allocate additional drive %u for bus %u / slot %u\n", i, bus, slot);
       }
     }
+    dprintf("Drive %u timeout reset due to insertion; sequence %u inserted %u\n", i, g_drive[i].sequence_number, g_drive[i].card_inserted);
     if (i < NUM_FLOPPIES + NUM_WINNIES && !g_drive[i].card_inserted)
     {
       g_drive[i].write_protected = writeprotect;
@@ -173,6 +177,9 @@ void service_SDIOUnitAttached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_
       g_drive[i].mmc = mmc;
       g_drive[i].rca = rca;
       barrier(); /* because we may read these from the background */
+      spin_lock(&g_drive[i].certainty_lock);
+      g_drive[i].certainty = FAITH;
+      spin_unlock(&g_drive[i].certainty_lock);
       spin_lock(&g_drive[i].sequence_lock);
       g_drive[i].card_inserted = true;
       ++g_drive[i].sequence_number;
@@ -255,6 +262,9 @@ void service_SDIOUnitDetached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_
    * can be issued from the background. Instead, we need to be very careful about
    * the ordering which we test things, and insert memory barriers. */
 
+  dprintf("Removal: drive 0 attached %u inserted %u bus %u slot %u rca %04X; compare %u/%u/%04X; seqno %u\n",
+      g_drive[0].slot_attached, g_drive[0].card_inserted, g_drive[0].bus, g_drive[0].slot, g_drive[0].rca,
+      bus, slot, rca, g_drive[0].sequence_number);
   uint32_t i;
   for (i = 0; i < NUM_FLOPPIES + NUM_WINNIES; i++)
   {
@@ -266,6 +276,9 @@ void service_SDIOUnitDetached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_
         barrier();
         if (g_drive[i].bus == bus && g_drive[i].slot == slot && g_drive[i].rca == rca)
         {
+          spin_lock(&g_drive[i].certainty_lock);
+          g_drive[i].certainty = FAITH;
+          spin_unlock(&g_drive[i].certainty_lock);
           spin_lock(&g_drive[i].sequence_lock);
           g_drive[i].card_inserted = false;
           ++g_drive[i].sequence_number;
@@ -312,6 +325,11 @@ void service_SDIOSlotReleased(uint32_t bus, uint32_t slot)
             g_drive[i].needs_wait = true;
           }
         }
+      }
+      if (g_drive[i].bus == bus && g_drive[i].slot == slot)
+      {
+        dprintf("Slot attached to drive %u being released, so reset timeout\n", i);
+        g_drive[i].certainty = FAITH;
       }
     }
   }
