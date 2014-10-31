@@ -102,6 +102,22 @@ void service_SDIOUnitAttached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_
 {
   IGNORE(fic);
 
+  /* Don't provide a drive for non-removable IO slots */
+  uint32_t slot_handle = 0;
+  uint32_t slot_spec;
+  while (!_swix(SDIO_Enumerate, _INR(0,1)|_OUTR(1,2),
+      SDIOEnumerate_Slots, slot_handle,
+      &slot_handle, &slot_spec) && slot_handle != 0)
+  {
+    if (((slot_spec & SDIOEnumerate_BusMask) >> SDIOEnumerate_BusShift) == bus &&
+        ((slot_spec & SDIOEnumerate_SlotMask) >> SDIOEnumerate_SlotShift) == slot)
+    {
+      if (slot_spec & SDIOEnumerate_Integrated)
+        return;
+      break;
+    }
+  }
+
   /* Read card registers first, so if the SWIs fail we can just pretend the card
    * was never inserted */
   uint32_t memory_ocr;
@@ -253,6 +269,22 @@ void service_SDIOUnitDetached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_
   IGNORE(fic);
   IGNORE(writeprotect);
   IGNORE(mmc);
+
+  /* Nothing to do for non-removable IO slots */
+  uint32_t slot_handle = 0;
+  uint32_t slot_spec;
+  while (!_swix(SDIO_Enumerate, _INR(0,1)|_OUTR(1,2),
+      SDIOEnumerate_Slots, slot_handle,
+      &slot_handle, &slot_spec) && slot_handle != 0)
+  {
+    if (((slot_spec & SDIOEnumerate_BusMask) >> SDIOEnumerate_BusShift) == bus &&
+        ((slot_spec & SDIOEnumerate_SlotMask) >> SDIOEnumerate_SlotShift) == slot)
+    {
+      if (slot_spec & SDIOEnumerate_Integrated)
+        return;
+      break;
+    }
+  }
 
   /* There will normally be exactly one drive associated with this bus/slot/RCA
    * combination - the only exceptions are if allocation failed, or if this is
