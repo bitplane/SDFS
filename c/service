@@ -49,19 +49,22 @@ static void upcall(uint32_t reason, uint8_t drive)
   _swix(OS_UpCall, _INR(0,1), reason, drive_spec);
 }
 
-void service_SDIOSlotAttached(uint32_t bus, uint32_t slot, bool integrated, bool no_card_detect)
+void service_SDIOSlotAttached(uint32_t bus, uint32_t slot, bool integrated, bool no_card_detect, bool integrated_mem)
 {
   /* Don't provide a drive for non-removable IO slots */
   if (integrated)
     return;
 
+  uint32_t min_drive = integrated_mem ? 4 : 0;
+  uint32_t max_drive = min_drive + (integrated_mem ? NUM_WINNIES : NUM_FLOPPIES) - 1;
+
   /* We need at least one drive to represent this new slot */
   spinrw_write_lock(&g_drive_lock);
   uint32_t i;
-  for (i = 0; i < NUM_FLOPPIES + NUM_WINNIES; i++)
+  for (i = min_drive; i <= max_drive; i++)
     if (!g_drive[i].slot_attached)
       break;
-  if (i < NUM_FLOPPIES + NUM_WINNIES)
+  if (i <= max_drive)
   {
     g_drive[i].no_card_detect = no_card_detect;
     g_drive[i].card_inserted = false;
@@ -75,9 +78,10 @@ void service_SDIOSlotAttached(uint32_t bus, uint32_t slot, bool integrated, bool
   spinrw_write_unlock(&g_drive_lock);
 }
 
-void service_SDIOSlotDetached(uint32_t bus, uint32_t slot, bool integrated, bool no_card_detect)
+void service_SDIOSlotDetached(uint32_t bus, uint32_t slot, bool integrated, bool no_card_detect, bool integrated_mem)
 {
   IGNORE(no_card_detect);
+  IGNORE(integrated_mem);
 
   /* Nothing to do for non-removable IO slots */
   if (integrated)
@@ -162,7 +166,7 @@ void service_SDIOUnitAttached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_
       break;
   if (i == NUM_FLOPPIES + NUM_WINNIES)
   {
-    /* Look for a empty drive associated with this slot. */
+    /* Look for an empty drive associated with this slot. */
     for (i = 0; i < NUM_FLOPPIES + NUM_WINNIES; i++)
       if (g_drive[i].slot_attached && !g_drive[i].card_inserted && g_drive[i].bus == bus && g_drive[i].slot == slot)
         break;
@@ -170,10 +174,29 @@ void service_SDIOUnitAttached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_
     {
       /* There weren't any empty drives for this slot.
        * See if we can allocate another. */
-      for (i = 0; i < NUM_FLOPPIES + NUM_WINNIES; i++)
+      uint32_t min_drive = 0;
+      uint32_t max_drive = NUM_FLOPPIES - 1;
+      uint32_t slot_handle = 0;
+      uint32_t slot_spec;
+      while (!_swix(SDIO_Enumerate, _INR(0,1)|_OUTR(1,2),
+          SDIOEnumerate_Slots, slot_handle,
+          &slot_handle, &slot_spec) && slot_handle != 0)
+      {
+        if ((slot_spec & SDIOEnumerate_BusMask) >> SDIOEnumerate_BusShift == bus &&
+            (slot_spec & SDIOEnumerate_SlotMask) >> SDIOEnumerate_SlotShift == slot)
+        {
+          if (slot_spec & SDIOEnumerate_IntegratedMem)
+          {
+            min_drive = 4;
+            max_drive = 4 + NUM_WINNIES - 1;
+          }
+          break;
+        }
+      }
+      for (i = min_drive; i <= max_drive; i++)
         if (!g_drive[i].slot_attached)
           break;
-      if (i < NUM_FLOPPIES + NUM_WINNIES)
+      if (i <= max_drive)
       {
         /* Multiple drives for this slot */
         g_drive[i].card_inserted = false;
@@ -183,6 +206,8 @@ void service_SDIOUnitAttached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_
         g_drive[i].slot_attached = true;
         dprintf("Allocate additional drive %u for bus %u / slot %u\n", i, bus, slot);
       }
+      else
+        i = NUM_FLOPPIES + NUM_WINNIES;
     }
     dprintf("Drive %u timeout reset due to insertion; sequence %u inserted %u\n", i, g_drive[i].sequence_number, g_drive[i].card_inserted);
     if (i < NUM_FLOPPIES + NUM_WINNIES && !g_drive[i].card_inserted)

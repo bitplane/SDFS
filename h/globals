@@ -73,7 +73,7 @@
 #define NUM_FLOPPIES (4)
 
 /** Number of "hard" drives to declare to FileCore */
-#define NUM_WINNIES  (0)
+#define NUM_WINNIES  (1)
 
 /** Buffer size for media type name */
 #define MEDIA_TYPE_NAME_LEN (20)
@@ -290,6 +290,9 @@ extern drive_t g_drive[NUM_FLOPPIES + NUM_WINNIES];
 
 /** Lock for drive state array */
 extern spinrwlock_t g_drive_lock;
+
+/** Bitmask to invert in default drive number in CMOS */
+extern uint8_t g_default_drive_toggle;
 
 
 #endif

@@ -60,7 +60,7 @@ _kernel_oserror *command_status_sdfsdrive(void)
 {
   uint32_t default_drive;
   _swix(OS_Byte, _INR(0,1)|_OUT(2), OsByte_ReadCMOS, DEFAULT_DRIVE_BYTE, &default_drive);
-  default_drive = (default_drive & DEFAULT_DRIVE_MASK) >> DEFAULT_DRIVE_SHIFT;
+  default_drive = ((default_drive & DEFAULT_DRIVE_MASK) >> DEFAULT_DRIVE_SHIFT) ^ g_default_drive_toggle;
   printf("SDFSdrive  %u\n", default_drive);
   return NULL;
 }
@@ -84,7 +84,7 @@ _kernel_oserror *command_configure_sdfsdrive(const char *drive)
     return configure_TOO_LARGE;
   _swix(OS_Byte, _INR(0,1)|_OUT(2), OsByte_ReadCMOS, DEFAULT_DRIVE_BYTE, &cmos);
   cmos = cmos &~ DEFAULT_DRIVE_MASK;
-  cmos |= default_drive << DEFAULT_DRIVE_SHIFT;
+  cmos |= (default_drive ^ g_default_drive_toggle) << DEFAULT_DRIVE_SHIFT;
   _swix(OS_Byte, _INR(0,2), OsByte_WriteCMOS, DEFAULT_DRIVE_BYTE, cmos);
   return NULL;
 }

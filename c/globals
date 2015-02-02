@@ -37,3 +37,4 @@ void       (*g_filecore_callback_winnie_op_completed)(void);
 char         g_media_type_name[MEDIA_TYPE_NAME_LEN];
 drive_t      g_drive[NUM_FLOPPIES + NUM_WINNIES];
 spinrwlock_t g_drive_lock = SPINRW_INITIALISER;
+uint8_t      g_default_drive_toggle;

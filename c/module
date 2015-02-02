@@ -43,6 +43,7 @@
 #include "Interface/FileCoreErr.h"
 #include "Interface/SDFSErr.h"
 #include "Interface/SDIO.h"
+#include "Interface/SDHCIDevice.h"
 
 #include "SyncLib/synclib.h"
 
@@ -113,9 +114,37 @@ _kernel_oserror *module_initialise(const char *cmd_tail, int podule_base, void *
     goto failed_init;
   }
 
+  /* Some machines (such as the Compute Module) have non-removable eMMC or eSD
+   * so the natural default drive is 4, but they run the same ROM as machines for
+   * which the natural default drive is 0. Solve this by inverting bit 2 of the
+   * CMOS if there is a HAL device with the IntegratedMem flag set. We can't ask
+   * SDIODriver because that would have to wait until callbacks have triggered.
+   */
+  uint32_t handle = 0;
+  while (true)
+  {
+    sdhcidevice_t *device;
+    uint32_t sloti;
+    _kernel_oserror *e = _swix(OS_Hardware, _INR(0,1)|_IN(8)|_OUTR(1,2),
+                               HALDeviceType_ExpCtl + HALDeviceExpCtl_SDIO,
+                               handle, 5, &handle, &device);
+    if (e != NULL || handle == -1u)
+      break;
+    for (sloti = 0; sloti < device->slots; sloti++)
+    {
+      if (device->slotinfo[sloti].flags & HALDeviceSDHCI_SlotFlag_IntegratedMem)
+        break;
+    }
+    if (sloti < device->slots)
+    {
+      g_default_drive_toggle = 4;
+      break;
+    }
+  }
+
   /* Read default drive from CMOS byte 17, bits 4-6 */
   _swix(OS_Byte, _INR(0,1)|_OUT(2), OsByte_ReadCMOS, DEFAULT_DRIVE_BYTE, &default_drive);
-  default_drive = (default_drive & DEFAULT_DRIVE_MASK) >> DEFAULT_DRIVE_SHIFT;
+  default_drive = ((default_drive & DEFAULT_DRIVE_MASK) >> DEFAULT_DRIVE_SHIFT) ^ g_default_drive_toggle;
 
   /* Register with FileCore */
   e = _swix(FileCore_Create, _INR(0,6)|_OUTR(0,2),
@@ -167,7 +196,8 @@ _kernel_oserror *module_initialise(const char *cmd_tail, int podule_base, void *
       service_SDIOSlotAttached((slot_spec & SDIOEnumerate_BusMask) >> SDIOEnumerate_BusShift,
                                (slot_spec & SDIOEnumerate_SlotMask) >> SDIOEnumerate_SlotShift,
                                slot_spec & SDIOEnumerate_Integrated,
-                               slot_spec & SDIOEnumerate_NoCardDetect);
+                               slot_spec & SDIOEnumerate_NoCardDetect,
+                               slot_spec & SDIOEnumerate_IntegratedMem);
       uint32_t unit_handle = 0;
       uint32_t unit_spec[2];
       uint32_t unit_size[2];
@@ -240,14 +270,16 @@ void module_service(int service_number, _kernel_swi_regs *r, void *pw)
       service_SDIOSlotAttached((r->r[2] & SDIOSlotAttached_BusMask) >> SDIOSlotAttached_BusShift,
                                (r->r[2] & SDIOSlotAttached_SlotMask) >> SDIOSlotAttached_SlotShift,
                                r->r[2] & SDIOSlotAttached_Integrated,
-                               r->r[2] & SDIOSlotAttached_NoCardDetect);
+                               r->r[2] & SDIOSlotAttached_NoCardDetect,
+                               r->r[2] & SDIOSlotAttached_IntegratedMem);
       break;
 
     case Service_SDIOSlotDetached:
       service_SDIOSlotDetached((r->r[2] & SDIOSlotAttached_BusMask) >> SDIOSlotAttached_BusShift,
                                (r->r[2] & SDIOSlotAttached_SlotMask) >> SDIOSlotAttached_SlotShift,
                                r->r[2] & SDIOSlotAttached_Integrated,
-                               r->r[2] & SDIOSlotAttached_NoCardDetect);
+                               r->r[2] & SDIOSlotAttached_NoCardDetect,
+                               r->r[2] & SDIOSlotAttached_IntegratedMem);
       break;
 
     case Service_SDIOUnitAttached:
@@ -422,7 +454,7 @@ _kernel_oserror *module_discop_handler(_kernel_swi_regs *r, void *pw)
   dprintf("DiscOp %u, flags %03X, disc address %u/%08X, buffer %08X, length %u\n",
       r->r[1] & DiscOp_Op_Mask,
       r->r[1] &~ DiscOp_Op_Mask,
-      r->r[2] >> 28,
+      (uint32_t) r->r[2] >> 28,
       r->r[2] &~ 0xE0000000,
       r->r[3],
       r->r[4]);
@@ -445,7 +477,7 @@ _kernel_oserror *module_discop_handler(_kernel_swi_regs *r, void *pw)
          * least in the SectorDiscOp world */
         return (_kernel_oserror *) BadParmsErr;
       e = discop(reason, flags,
-                 r->r[2] >> LegacyDiscAddress_DriveNumber_Shift, &disc_address,
+                 (uint32_t) r->r[2] >> LegacyDiscAddress_DriveNumber_Shift, &disc_address,
                  (block_or_scatter_t *) &r->r[3], (size_t *) &r->r[4]
                  ).oserror;
       r->r[2] = (r->r[2] &~ LegacyDiscAddress_SectorOffset_Mask) | (uint32_t) (disc_address >> LOG2_SECTOR_SIZE);
