@@ -283,7 +283,8 @@ static low_level_error_t transfer_with_retries(uint32_t reason,
         }
 
         /* Some cards seem to need to be deselected and reselected after errors */
-        dr->needs_reselect = true;
+        if (e.oserror->errnum != ErrorNumber_SDFSExtEscape)
+          dr->needs_reselect = true;
 
         if (transferred)
           ++retries; /* At least some data transferred, so it's not fair to decrement the retry count when we loop */
@@ -420,6 +421,7 @@ low_level_error_t discop(uint32_t reason,
     }
     else
     {
+      dr->slot_claimed = true;
       dprintf("Need to probe for card presence\n");
       bool rescan_needed = !dr->card_inserted;
       if (dr->card_inserted)

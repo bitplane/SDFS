@@ -102,7 +102,7 @@ void service_SDIOSlotDetached(uint32_t bus, uint32_t slot, bool integrated, bool
   spinrw_write_unlock(&g_drive_lock);
 }
 
-void service_SDIOUnitAttached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_t unit, uint32_t fic, bool writeprotect, bool mmc, uint64_t capacity)
+void service_SDIOUnitAttached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_t unit, uint32_t fic, bool writeprotect, bool mmc, uint64_t capacity, bool called_from_init)
 {
   IGNORE(fic);
 
@@ -219,7 +219,7 @@ void service_SDIOUnitAttached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_
       g_drive[i].rca = rca;
       barrier(); /* because we may read these from the background */
       spin_lock(&g_drive[i].certainty_lock);
-      g_drive[i].certainty = FAITH;
+      g_drive[i].certainty = called_from_init ? 0 : FAITH;
       spin_unlock(&g_drive[i].certainty_lock);
       spin_lock(&g_drive[i].sequence_lock);
       g_drive[i].card_inserted = true;
@@ -365,28 +365,24 @@ void service_SDIOSlotReleased(uint32_t bus, uint32_t slot)
     if (g_drive[i].slot_attached)
     {
       barrier();
-      if (g_drive[i].card_inserted)
-      {
-        barrier();
-        if (g_drive[i].bus == bus && g_drive[i].slot == slot)
-        {
-          if (g_drive[i].slot_claimed)
-            /* This just means we've finished using this drive ourselves */
-            g_drive[i].slot_claimed = false;
-          else
-          {
-            /* Someone else has been using this slot, or we've just finished
-             * using a different drive in the same slot. Disable optimisations
-             * for the next time we use this drive. */
-            g_drive[i].needs_reselect = true;
-            g_drive[i].needs_wait = true;
-          }
-        }
-      }
+      /* Our behaviour doesn't depend upon whether card_inserted is true or not */
       if (g_drive[i].bus == bus && g_drive[i].slot == slot)
       {
+        if (g_drive[i].slot_claimed)
+          /* This just means we've finished using this drive ourselves */
+          g_drive[i].slot_claimed = false;
+        else
+        {
+          /* Someone else has been using this slot, or we've just finished
+           * using a different drive in the same slot. Disable optimisations
+           * for the next time we use this drive. */
+          g_drive[i].needs_reselect = true;
+          g_drive[i].needs_wait = true;
+        }
         dprintf("Slot attached to drive %u being released, so reset timeout\n", i);
+        spin_lock(&g_drive[i].certainty_lock);
         g_drive[i].certainty = FAITH;
+        spin_unlock(&g_drive[i].certainty_lock);
       }
     }
   }

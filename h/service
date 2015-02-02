@@ -32,7 +32,7 @@
 
 void service_SDIOSlotAttached(uint32_t bus, uint32_t slot, bool integrated, bool no_card_detect, bool integrated_mem);
 void service_SDIOSlotDetached(uint32_t bus, uint32_t slot, bool integrated, bool no_card_detect, bool integrated_mem);
-void service_SDIOUnitAttached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_t unit, uint32_t fic, bool writeprotect, bool mmc, uint64_t capacity);
+void service_SDIOUnitAttached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_t unit, uint32_t fic, bool writeprotect, bool mmc, uint64_t capacity, bool called_from_init);
 void service_SDIOUnitDetached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_t unit, uint32_t fic, bool writeprotect, bool mmc);
 void service_SDIOSlotReleased(uint32_t bus, uint32_t slot);
 

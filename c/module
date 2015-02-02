@@ -212,7 +212,8 @@ _kernel_oserror *module_initialise(const char *cmd_tail, int podule_base, void *
                                  (unit_spec[1] & SDIOEnumerate_FICMask) >> SDIOEnumerate_FICShift,
                                  unit_spec[1] & SDIOEnumerate_WriteProtect,
                                  unit_spec[1] & SDIOEnumerate_MMC,
-                                 (uint64_t) unit_size[1] << 32 | unit_size[0]);
+                                 (uint64_t) unit_size[1] << 32 | unit_size[0],
+                                 true);
       }
     }
   }
@@ -290,7 +291,8 @@ void module_service(int service_number, _kernel_swi_regs *r, void *pw)
                                (r->r[3] & SDIOUnitAttached_FICMask) >> SDIOUnitAttached_FICShift,
                                r->r[3] & SDIOUnitAttached_WriteProtect,
                                r->r[3] & SDIOUnitAttached_MMC,
-                               (uint64_t) r->r[5] << 32 | (uint32_t) r->r[4]);
+                               (uint64_t) r->r[5] << 32 | (uint32_t) r->r[4],
+                               false);
       break;
 
     case Service_SDIOUnitDetached:
@@ -514,7 +516,7 @@ int module_tickerv_handler(_kernel_swi_regs *r, void *pw)
   {
     spin_lock(&g_drive[drive].certainty_lock);
     uint32_t old_value = g_drive[drive].certainty;
-    if (old_value > 0)
+    if (old_value > 0 && !g_drive[drive].slot_claimed)
       g_drive[drive].certainty = old_value - 1;
     spin_unlock(&g_drive[drive].certainty_lock);
   }
