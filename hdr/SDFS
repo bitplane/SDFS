@@ -59,6 +59,7 @@ SWIClass        SETS    SDFSSWI_Name
         ; Reason codes to ReadCardInfo
                         ^       0
 SDFSReadCardInfo_Size   #       1
+SDFSReadCardInfo_Location #     1
 
         OPT     OldOpt
         END

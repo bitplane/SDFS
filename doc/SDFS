@@ -28,6 +28,7 @@ On entry
 
 R0 = reason code:
        0 => return card capacity in bytes in R2-R3 (64-bit little-endian)
+       1 => return card location (slot, bus, RCA) in R2
        other values reserved for future use
 R1 = drive number
 

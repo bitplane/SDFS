@@ -71,8 +71,15 @@ _kernel_oserror *swi_ReadCardInfo(uint32_t reason, uint32_t drive, _kernel_swi_r
       r->r[3] = (uint32_t) (g_drive[drive].capacity >> 32);
       break;
 
+    case SDFSReadCardInfo_Location:
+      r->r[2] = (g_drive[drive].slot << 0) |
+                (g_drive[drive].bus << 8) |
+                (g_drive[drive].rca << 16);
+      break;
+
     default:
       e = MESSAGE_ERRORLOOKUP(true, BadReason, "SDFS_ReadCardInfo");
+      break;
   }
 
   spinrw_read_unlock(&g_drive_lock);
