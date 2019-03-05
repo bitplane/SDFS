@@ -32,7 +32,7 @@
 #include "swis.h"
 
 #include "Global/RISCOS.h"
-#include "Global/Upcall.h"
+#include "Global/UpCall.h"
 #include "Interface/SDIO.h"
 
 #include "SyncLib/barrier.h"
