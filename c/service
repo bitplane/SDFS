@@ -153,6 +153,10 @@ void service_SDIOUnitAttached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_
     return;
   }
 
+#ifndef DEBUG_ENABLED
+  IGNORE(e); /* TODO: think about logging errors somehow */
+#endif
+
   /* Look for an empty drive associated with this slot.
    * There should be at least one drive associated with this slot, but if it's
    * already occupied by a card with a different RCA, then we're on a shared MMC
@@ -176,8 +180,7 @@ void service_SDIOUnitAttached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_
        * See if we can allocate another. */
       uint32_t min_drive = 0;
       uint32_t max_drive = NUM_FLOPPIES - 1;
-      uint32_t slot_handle = 0;
-      uint32_t slot_spec;
+      slot_handle = 0;
       while (!_swix(SDIO_Enumerate, _INR(0,1)|_OUTR(1,2),
           SDIOEnumerate_Slots, slot_handle,
           &slot_handle, &slot_spec) && slot_handle != 0)
@@ -209,7 +212,8 @@ void service_SDIOUnitAttached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_
       else
         i = NUM_FLOPPIES + NUM_WINNIES;
     }
-    dprintf("Drive %u timeout reset due to insertion; sequence %u inserted %u\n", i, g_drive[i].sequence_number, g_drive[i].card_inserted);
+    if (i < NUM_FLOPPIES + NUM_WINNIES)
+      dprintf("Drive %u timeout reset due to insertion; sequence %u inserted %u\n", i, g_drive[i].sequence_number, (unsigned) g_drive[i].card_inserted);
     if (i < NUM_FLOPPIES + NUM_WINNIES && !g_drive[i].card_inserted)
     {
       g_drive[i].write_protected = writeprotect;
@@ -240,7 +244,7 @@ void service_SDIOUnitAttached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_
         g_drive[i].cmd23_supported = true; /* all MMC cards that support multi-block transfers support CMD23 */
       else
         g_drive[i].cmd23_supported = cardreg_read_int(scr, SCR_CMD_SUPPORT) & 2;
-      dprintf("Card support for CMD23 = %u\n", g_drive[i].cmd23_supported);
+      dprintf("Card support for CMD23 = %u\n", (unsigned) g_drive[i].cmd23_supported);
       /* MMC and SD cards effectively signal sector addressing the same way */
       g_drive[i].sector_addressed = memory_ocr & OCR_CCS;
       /* MMC cards predating spec version 3.1 return illegal command for block data transfer commands */
@@ -269,7 +273,7 @@ void service_SDIOUnitAttached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_
           free(g_drive[i].block_buffer);
         g_drive[i].block_buffer = malloc(1 << g_drive[i].write_block_size);
         g_drive[i].block_buffer_size = g_drive[i].write_block_size;
-        dprintf("Allocated buffer %p, size %u\n", g_drive[i].block_buffer, 1 << g_drive[i].write_block_size);
+        dprintf("Allocated buffer %p, size %u\n", g_drive[i].block_buffer, 1u << g_drive[i].write_block_size);
         if (g_drive[i].block_buffer == NULL)
         {
           g_drive[i].memory_card = false; /* maybe not the best error recovery, but better than a crash */
@@ -320,7 +324,7 @@ void service_SDIOUnitDetached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_
    * the ordering which we test things, and insert memory barriers. */
 
   dprintf("Removal: drive 0 attached %u inserted %u bus %u slot %u rca %04X; compare %u/%u/%04X; seqno %u\n",
-      g_drive[0].slot_attached, g_drive[0].card_inserted, g_drive[0].bus, g_drive[0].slot, g_drive[0].rca,
+      (unsigned) g_drive[0].slot_attached, (unsigned) g_drive[0].card_inserted, g_drive[0].bus, g_drive[0].slot, g_drive[0].rca,
       bus, slot, rca, g_drive[0].sequence_number);
   uint32_t i;
   for (i = 0; i < NUM_FLOPPIES + NUM_WINNIES; i++)

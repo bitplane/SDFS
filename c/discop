@@ -28,6 +28,7 @@
  */
 
 #include <string.h>
+#include <inttypes.h>
 #include "swis.h"
 
 #include "Global/NewErrors.h"
@@ -46,7 +47,7 @@
 #include "gpiodebug.h"
 
 /** Timeout to set on SDIO commands (cs) */
-#define OP_TIMEOUT (1000)
+#define OP_TIMEOUT (1000u)
 
 /** Timeout waiting for card to reach tran state (cs) */
 #define TRAN_TIMEOUT (10)
@@ -222,10 +223,10 @@ static low_level_error_t transfer_with_retries(uint32_t reason,
       }
       crblock.command |= LOG2_SECTOR_SIZE << SDIOOp_CmdFlg_BlockSplitShift;
       crblock.argument = (uint32_t) (dr->sector_addressed ? *disc_address >> LOG2_SECTOR_SIZE : *disc_address);
-      dprintf("SDIOOp: flags %08X, resplen %u, command %X, arg %X, ptr %p, len %u, timeout %u -> ",
+      dprintf("SDIOOp: flags %08X, resplen %u, command %X, arg %X, ptr %p, len %zu, timeout %u -> ",
                                   (dr->slot << SDIOOp_SlotShift) | (dr->bus << SDIOOp_BusShift) | SDIOOp_R1 |
                                   (reason == DiscOp_WriteSecs ? SDIOOp_TransWrite : SDIOOp_TransRead) | flags,
-                                  8 + SDIOOp_ResLen_R1,
+                                  8u + SDIOOp_ResLen_R1,
                                   crblock.command,
                                   crblock.argument,
                                   ptr->block,
@@ -239,7 +240,7 @@ static low_level_error_t transfer_with_retries(uint32_t reason,
                                   *transfer_length,
                                   OP_TIMEOUT,
                                   &not_transferred);
-      dprintf("%s; not_transferred = %u\n", e.oserror ? e.oserror->errmess : "OK", not_transferred);
+      dprintf("%s; not_transferred = %zu\n", e.oserror ? e.oserror->errmess : "OK", not_transferred);
       /* Advance buffer pointer or scatter list (as appropriate) according to
        * however many bytes we successfully transferred */
       transferred = *transfer_length - not_transferred;
@@ -494,7 +495,7 @@ low_level_error_t discop(uint32_t reason,
     address_limit <<= LOG2_SECTOR_SIZE;
   if (*disc_address + *fg_length > address_limit || !IS_SECTOR_ALIGNED(*disc_address))
   {
-    dprintf("Disc address range :%u/%016llX-%016llX, limit %016llX, %ssector aligned\n",
+    dprintf("Disc address range :%u/%016"PRIX64"-%016"PRIX64", limit %016"PRIX64", %ssector aligned\n",
         drive, *disc_address, *disc_address + *fg_length, address_limit, IS_SECTOR_ALIGNED(*disc_address) ? "is " : "not ");
     e.number = BadParmsErr;
     goto exit;
@@ -559,7 +560,7 @@ low_level_error_t discop(uint32_t reason,
     uint32_t chunk_size = ROUND_DOWN_32(0xFFFF << LOG2_SECTOR_SIZE, align_size);
     if (dr->single_blocks)
       chunk_size = 1 << LOG2_SECTOR_SIZE;
-    dprintf("align=%u, %016llX/%016llX/%016llX, chunk=%08X\n", align_size, start_down, end_down, end_up, chunk_size);
+    dprintf("align=%u, %016"PRIX64"/%016"PRIX64"/%016"PRIX64", chunk=%08X\n", align_size, start_down, end_down, end_up, chunk_size);
     block_or_scatter_t ptr_for_verify_ops;
     if (reason == DiscOp_Verify)
     {

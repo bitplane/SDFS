@@ -36,6 +36,7 @@
 #include "Global/CMOS.h"
 #include "Global/FSNumbers.h"
 #include "Global/OsBytes.h"
+#include "Global/HALEntries.h"
 #include "Global/ModHand.h"
 #include "Global/RISCOS.h"
 #include "Global/SWIs.h"
@@ -125,9 +126,9 @@ _kernel_oserror *module_initialise(const char *cmd_tail, int podule_base, void *
   {
     sdhcidevice_t *device;
     uint32_t sloti;
-    _kernel_oserror *e = _swix(OS_Hardware, _INR(0,1)|_IN(8)|_OUTR(1,2),
-                               HALDeviceType_ExpCtl + HALDeviceExpCtl_SDIO,
-                               handle, 5, &handle, &device);
+    e = _swix(OS_Hardware, _INR(0,1)|_IN(8)|_OUTR(1,2),
+              HALDeviceType_ExpCtl + HALDeviceExpCtl_SDIO,
+              handle, OSHW_DeviceEnumerateChrono, &handle, &device);
     if (e != NULL || handle == -1u)
       break;
     for (sloti = 0; sloti < device->slots; sloti++)
@@ -408,7 +409,7 @@ _kernel_oserror *module_miscop_handler(_kernel_swi_regs *r, void *pw)
 {
   IGNORE(pw);
 
-  dprintf("MiscOp %u\n", r->r[0]);
+  dprintf("MiscOp %u\n", (uint32_t) r->r[0]);
 
   switch (r->r[0])
   {
@@ -453,13 +454,13 @@ _kernel_oserror *module_discop_handler(_kernel_swi_regs *r, void *pw)
   uint64_t disc_address;
   IGNORE(pw);
 
-  dprintf("DiscOp %u, flags %03X, disc address %u/%08X, buffer %08X, length %u\n",
-      r->r[1] & DiscOp_Op_Mask,
+  dprintf("DiscOp %u, flags %03X, disc address %u/%08X, buffer %08X, length %zu\n",
+      (uint32_t) r->r[1] & DiscOp_Op_Mask,
       r->r[1] &~ DiscOp_Op_Mask,
       (uint32_t) r->r[2] >> 28,
       r->r[2] &~ 0xE0000000,
       r->r[3],
-      r->r[4]);
+      (size_t) r->r[4]);
 
   reason = r->r[1] & DiscOp_Op_Mask;
   switch (reason)

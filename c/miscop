@@ -43,7 +43,7 @@ low_level_error_t miscop_Mount(uint32_t drive, uint32_t byte_address, uint8_t * 
   uint64_t disc_address = (uint64_t) byte_address & LegacyDiscAddress_ByteOffset_Mask;
   IGNORE(disc_record);
 
-  dprintf("Mount - from :%u/%08X to %p, length %u, disc record %p\n",
+  dprintf("Mount - from :%u/%08X to %p, length %zu, disc record %p\n",
       drive, byte_address, buffer, length, (void *) disc_record);
 
   e = discop(DiscOp_ReadSecs, SDIOOp_DisableEscape, drive, &disc_address, (block_or_scatter_t *) &buffer, &length);

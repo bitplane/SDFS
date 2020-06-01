@@ -10,7 +10,7 @@ OBJS        = base cardreg command discop free freeveneer globals message miscop
 LIBS        = ${SYNCLIB}
 ROMCDEFINES = -DROM_MODULE
 
-#CFLAGS     += -DDEBUG_ENABLED
+CDFLAGS    += -DDEBUG_ENABLED
 
 #OBJS       += gpiodebug
 #CFLAGS     += -DGPIODEBUG
