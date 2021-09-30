@@ -70,6 +70,11 @@ void service_SDIOSlotAttached(uint32_t bus, uint32_t slot, bool integrated, bool
     g_drive[i].card_inserted = false;
     g_drive[i].bus = bus;
     g_drive[i].slot = slot;
+    if (_swix(SDIO_ControllerFeatures, _INR(0,1)|_OUT(2),
+        SDIOController_MaxBlockCount,
+        (bus << SDIOController_BusShift) | (slot << SDIOController_SlotShift),
+        &g_drive[i].maxblkcount))
+      g_drive[i].maxblkcount = 0xFFFF;
     barrier(); /* because we may read these from the background */
     g_drive[i].slot_attached = true;
     upcall(UpCall_DriveAdded, i);
@@ -205,6 +210,11 @@ void service_SDIOUnitAttached(uint32_t bus, uint32_t slot, uint32_t rca, uint32_
         g_drive[i].card_inserted = false;
         g_drive[i].bus = bus;
         g_drive[i].slot = slot;
+        if (_swix(SDIO_ControllerFeatures, _INR(0,1)|_OUT(2),
+            SDIOController_MaxBlockCount,
+            (bus << SDIOController_BusShift) | (slot << SDIOController_SlotShift),
+            &g_drive[i].maxblkcount))
+          g_drive[i].maxblkcount = 0xFFFF;
         barrier(); /* because we may read these from the background */
         g_drive[i].slot_attached = true;
         dprintf("Allocate additional drive %u for bus %u / slot %u\n", i, bus, slot);

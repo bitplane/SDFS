@@ -546,7 +546,7 @@ low_level_error_t discop(uint32_t reason,
    * separate code path for older cards that won't be tested properly, we assume
    * the worst case. Constraints are:
    * - must start and end on read/write block boundaries (may require read-modify-write)
-   * - must not exceed 65535*512-byte blocks (SDHCI limitation)
+   * - must not exceed 65535*512-byte blocks (SDHCI limitation - or less for some controllers)
    * - must not exceed 4MB (for some controllers when operating in UHS mode)
    * - some MMC cards have 4K sectors, and all operations must be done in multiples
    *     of 8*512-byte blocks (we can make this fall out of the block boundary restriction)
@@ -557,7 +557,7 @@ low_level_error_t discop(uint32_t reason,
     uint64_t start_down = ROUND_DOWN_64(*disc_address, align_size);
     uint64_t end_down = ROUND_DOWN_64(*disc_address + *fg_length, align_size);
     uint64_t end_up = ROUND_UP_64(*disc_address + *fg_length, align_size);
-    uint32_t chunk_size = ROUND_DOWN_32(0xFFFF << LOG2_SECTOR_SIZE, align_size);
+    uint32_t chunk_size = ROUND_DOWN_32(dr->maxblkcount << LOG2_SECTOR_SIZE, align_size);
     if (dr->single_blocks)
       chunk_size = 1 << LOG2_SECTOR_SIZE;
     dprintf("align=%u, %016"PRIX64"/%016"PRIX64"/%016"PRIX64", chunk=%08X\n", align_size, start_down, end_down, end_up, chunk_size);
