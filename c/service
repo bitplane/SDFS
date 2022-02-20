@@ -55,8 +55,20 @@ void service_SDIOSlotAttached(uint32_t bus, uint32_t slot, bool integrated, bool
   if (integrated)
     return;
 
-  uint32_t min_drive = integrated_mem ? 4 : 0;
-  uint32_t max_drive = min_drive + (integrated_mem ? NUM_WINNIES : NUM_FLOPPIES) - 1;
+  /* Some boards feature non-removable memory devices with a no-fit option that
+   * can only detected by seeing whether the device responds or not once we
+   * start trying to talk to it. To support these, defer drive allocation until
+   * the UnitAttached service call. This is already designed to dynamically
+   * add extra drives in case a shared MMC bus is found, so the only difference
+   * is that the initial number of drives is 0, not 1. Note that there is still
+   * a minimum of 1 drive per slot for removable slots, since a removable slot
+   * may be empty at module initialisation time, and there's no way to
+   * electrically distinguish an empty socket from a no-fit socket. */
+  if (integrated_mem)
+    return;
+
+  uint32_t min_drive = 0;
+  uint32_t max_drive = min_drive + NUM_FLOPPIES - 1;
 
   /* We need at least one drive to represent this new slot */
   spinrw_write_lock(&g_drive_lock);
