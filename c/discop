@@ -202,7 +202,7 @@ static low_level_error_t transfer_with_retries(uint32_t reason,
       else
       {
         crblock.command = reason == DiscOp_WriteSecs ? CMD25_WRITE_MULTIPLE_BLOCK : CMD18_READ_MULTIPLE_BLOCK;
-        if (dr->cmd23_supported)
+        if (dr->cmd23_supported && !dr->broken_cmd23)
         {
           /* Card supports CMD23 - use it to improve speed */
           COMMAND_NO_DATA(dr->bus, dr->slot, flags & SDIOOp_DisableEscape, CMD23_SET_BLOCK_COUNT, *transfer_length >> LOG2_SECTOR_SIZE, R1, set_block_count_blk, e.oserror);

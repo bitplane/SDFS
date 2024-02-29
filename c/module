@@ -198,7 +198,8 @@ _kernel_oserror *module_initialise(const char *cmd_tail, int podule_base, void *
                                (slot_spec & SDIOEnumerate_SlotMask) >> SDIOEnumerate_SlotShift,
                                slot_spec & SDIOEnumerate_Integrated,
                                slot_spec & SDIOEnumerate_NoCardDetect,
-                               slot_spec & SDIOEnumerate_IntegratedMem);
+                               slot_spec & SDIOEnumerate_IntegratedMem,
+                               slot_spec & SDIOEnumerate_BrokenCMD23);
       uint32_t unit_handle = 0;
       uint32_t unit_spec[2];
       uint32_t unit_size[2];
@@ -273,7 +274,8 @@ void module_service(int service_number, _kernel_swi_regs *r, void *pw)
                                (r->r[2] & SDIOSlotAttached_SlotMask) >> SDIOSlotAttached_SlotShift,
                                r->r[2] & SDIOSlotAttached_Integrated,
                                r->r[2] & SDIOSlotAttached_NoCardDetect,
-                               r->r[2] & SDIOSlotAttached_IntegratedMem);
+                               r->r[2] & SDIOSlotAttached_IntegratedMem,
+                               r->r[2] & SDIOSlotAttached_BrokenCMD23);
       break;
 
     case Service_SDIOSlotDetached:
@@ -281,7 +283,8 @@ void module_service(int service_number, _kernel_swi_regs *r, void *pw)
                                (r->r[2] & SDIOSlotAttached_SlotMask) >> SDIOSlotAttached_SlotShift,
                                r->r[2] & SDIOSlotAttached_Integrated,
                                r->r[2] & SDIOSlotAttached_NoCardDetect,
-                               r->r[2] & SDIOSlotAttached_IntegratedMem);
+                               r->r[2] & SDIOSlotAttached_IntegratedMem,
+                               r->r[2] & SDIOSlotAttached_BrokenCMD23);
       break;
 
     case Service_SDIOUnitAttached:

@@ -246,6 +246,7 @@ typedef struct
   bool              slot_claimed;      /**< Part of the mechanism for detecting other users of this drive's slot */
   bool              needs_reselect;    /**< Card state is unknown, needs to be set up (again) */
   bool              needs_wait;        /**< Card's last operation was or might be a write operation, so wait for it to return to tran state */
+  bool              broken_cmd23;      /**< Need to use CMD12 rather than CMD23 for multi-block operations (BCM2835 hardware SDHOST controller bug) */
   uint32_t          maxblkcount;       /**< maximum number of blocks per operation */
   uint8_t           bus;               /**< SDIODriver bus number */
   uint8_t           slot;              /**< SDIODriver slot number */

@@ -49,7 +49,7 @@ static void upcall(uint32_t reason, uint8_t drive)
   _swix(OS_UpCall, _INR(0,1), reason, drive_spec);
 }
 
-void service_SDIOSlotAttached(uint32_t bus, uint32_t slot, bool integrated, bool no_card_detect, bool integrated_mem)
+void service_SDIOSlotAttached(uint32_t bus, uint32_t slot, bool integrated, bool no_card_detect, bool integrated_mem, bool broken_cmd23)
 {
   /* Don't provide a drive for non-removable IO slots */
   if (integrated)
@@ -80,6 +80,7 @@ void service_SDIOSlotAttached(uint32_t bus, uint32_t slot, bool integrated, bool
   {
     g_drive[i].no_card_detect = no_card_detect;
     g_drive[i].card_inserted = false;
+    g_drive[i].broken_cmd23 = broken_cmd23;
     g_drive[i].bus = bus;
     g_drive[i].slot = slot;
     if (_swix(SDIO_ControllerFeatures, _INR(0,1)|_OUT(2),
@@ -95,10 +96,11 @@ void service_SDIOSlotAttached(uint32_t bus, uint32_t slot, bool integrated, bool
   spinrw_write_unlock(&g_drive_lock);
 }
 
-void service_SDIOSlotDetached(uint32_t bus, uint32_t slot, bool integrated, bool no_card_detect, bool integrated_mem)
+void service_SDIOSlotDetached(uint32_t bus, uint32_t slot, bool integrated, bool no_card_detect, bool integrated_mem, bool broken_cmd23)
 {
   IGNORE(no_card_detect);
   IGNORE(integrated_mem);
+  IGNORE(broken_cmd23);
 
   /* Nothing to do for non-removable IO slots */
   if (integrated)
