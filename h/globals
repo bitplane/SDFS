@@ -30,6 +30,7 @@
 #include "kernel.h"
 #include "swis.h"
 
+#include "AsmUtils/rminfo.h"
 #include "SyncLib/spin.h"
 #include "SyncLib/spinrw.h"
 
@@ -52,7 +53,7 @@
 #undef ENABLE_BACKGROUND_TRANSFERS
 
 /** Base address of the module as a byte pointer */
-#define MODULE_BASE_ADDRESS (*(const char **)&base)
+#define MODULE_BASE_ADDRESS ((const char *)Image_RO_Base)
 
 /** Filing system title, as passed to FileCore */
 #define FILING_SYSTEM_TITLE "SDFS"
@@ -265,9 +266,6 @@ typedef struct
 
 
 /* Global variables */
-
-/** Symbol at whose address is a pointer to the module base address */
-extern void base(void);
 
 /** MessageTrans descriptor for our Messages file */
 extern uint32_t g_message_fd[4];

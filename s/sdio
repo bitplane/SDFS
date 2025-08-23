@@ -22,13 +22,13 @@
 ; Use is subject to license terms.
 ;
 
-        GET     ListOpts
-        GET     Macros
-        GET     System
-        GET     FSNumbers
-        GET     NewErrors
-        GET     SDIO
-        GET     APCS/$APCS
+        GET     Hdr:ListOpts
+        GET     Hdr:Macros
+        GET     Hdr:System
+        GET     Hdr:FSNumbers
+        GET     Hdr:NewErrors
+        GET     Hdr:SDIO
+        GET     Hdr:APCS.<APCS>
 
         EXPORT  sdio_op_fg_nodata
         EXPORT  sdio_op_fg_data

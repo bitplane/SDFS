@@ -29,10 +29,10 @@
         IMPORT  free_handler
         IMPORT  g_module_pw
 
-        GET     ListOpts
-        GET     Macros
-        GET     System
-        GET     APCS/$APCS
+        GET     Hdr:ListOpts
+        GET     Hdr:Macros
+        GET     Hdr:System
+        GET     Hdr:APCS.<APCS>
 
         AREA    |Asm$$Code|, CODE, READONLY
 
