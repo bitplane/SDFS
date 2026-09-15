@@ -33,6 +33,7 @@
 #include "swis.h"
 
 #include "Interface/Free.h"
+#include "Interface/SDFS.h"
 
 #include "free.h"
 #include "globals.h"
