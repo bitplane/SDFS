@@ -455,6 +455,7 @@ _kernel_oserror *module_discop_handler(_kernel_swi_regs *r, void *pw)
   uint32_t reason;
   uint32_t flags;
   uint64_t disc_address;
+  uint32_t logical_sector_shift;
   IGNORE(pw);
 
   dprintf("DiscOp %u, flags %03X, disc address %u/%08X, buffer %08X, length %zu\n",
@@ -475,10 +476,13 @@ _kernel_oserror *module_discop_handler(_kernel_swi_regs *r, void *pw)
       /* else drop through */
     case DiscOp_ReadSecs:
     case DiscOp_WriteSecs:
+      logical_sector_shift = ((const disc_record_t *) r->r[5])->log2secsize;
+      if (logical_sector_shift < 8 || logical_sector_shift > 12)
+        return (_kernel_oserror *) BadParmsErr;
       flags = r->r[1] & (DiscOp_Op_ScatterList_Flag | DiscOp_Op_IgnoreEscape_Flag | DiscOp_Op_IgnoreTimeout_Flag | DiscOp_Op_BackgroundOp_Flag);
       flags *= SDIOOp_Scatter / DiscOp_Op_ScatterList_Flag;
-      disc_address = ((uint64_t) r->r[2] & LegacyDiscAddress_SectorOffset_Mask) << LOG2_SECTOR_SIZE;
-      if (disc_address + r->r[4] >= 1ull << (LegacyDiscAddress_DriveNumber_Shift + LOG2_SECTOR_SIZE))
+      disc_address = ((uint64_t) r->r[2] & LegacyDiscAddress_SectorOffset_Mask) << logical_sector_shift;
+      if (disc_address + r->r[4] >= 1ull << (LegacyDiscAddress_DriveNumber_Shift + logical_sector_shift))
         /* We won't be able to update the disc address properly on exit, at
          * least in the SectorDiscOp world */
         return (_kernel_oserror *) BadParmsErr;
@@ -486,7 +490,7 @@ _kernel_oserror *module_discop_handler(_kernel_swi_regs *r, void *pw)
                  (uint32_t) r->r[2] >> LegacyDiscAddress_DriveNumber_Shift, &disc_address,
                  (block_or_scatter_t *) &r->r[3], (size_t *) &r->r[4]
                  ).oserror;
-      r->r[2] = (r->r[2] &~ LegacyDiscAddress_SectorOffset_Mask) | (uint32_t) (disc_address >> LOG2_SECTOR_SIZE);
+      r->r[2] = (r->r[2] &~ LegacyDiscAddress_SectorOffset_Mask) | (uint32_t) (disc_address >> logical_sector_shift);
       return e;
 
     /* Ops that we don't support, but lack of support is harmless */

@@ -493,7 +493,7 @@ low_level_error_t discop(uint32_t reason,
   address_limit = 1ull << 32;
   if (dr->sector_addressed)
     address_limit <<= LOG2_SECTOR_SIZE;
-  if (*disc_address + *fg_length > address_limit || !IS_SECTOR_ALIGNED(*disc_address))
+  if (*disc_address > address_limit || *fg_length > address_limit - *disc_address)
   {
     dprintf("Disc address range :%u/%016"PRIX64"-%016"PRIX64", limit %016"PRIX64", %ssector aligned\n",
         drive, *disc_address, *disc_address + *fg_length, address_limit, IS_SECTOR_ALIGNED(*disc_address) ? "is " : "not ");
