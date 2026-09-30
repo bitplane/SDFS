@@ -369,8 +369,8 @@ static low_level_error_t buffered_transfer(uint32_t reason,
         size_t this_time = MIN(ptr->scatter->length, count);
         if (reason == DiscOp_ReadSecs)
         {
-          memcpy(ptr->scatter->address, interesting, count);
-          interesting += count;
+          memcpy(ptr->scatter->address, interesting, this_time);
+          interesting += this_time;
         }
         ptr->scatter->address += this_time;
         if ((ptr->scatter->length -= this_time) == 0)
